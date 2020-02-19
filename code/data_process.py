@@ -10,6 +10,7 @@ import sys
 import random
 from subprocess import Popen, PIPE
 import argparse
+from tqdm import tqdm
 
 
 # input arguments
@@ -26,7 +27,7 @@ parser.add_argument('--walk_n', type = int, default = 5,
 				   help = 'number of walk per node')
 parser.add_argument('--walk_l', type = int, default = 20,
 				   help = 'walk len')
-parser.add_argument('--data_path', type=str, default='../data/AMiner-T-2013',
+parser.add_argument('--data_path', type=str, default='../data/Aminer-T-2010',
 				   help='path to data')
 
 
@@ -34,7 +35,7 @@ args = parser.parse_args()
 print(args)
 
 # tokenizer.perl is from Moses: https://github.com/moses-smt/mosesdecoder/tree/master/scripts/tokenizer
-tokenizer_cmd = ['./tokenizer.pl', '-l', 'en', '-q', '-']
+tokenizer_cmd = ['../tokenizer.pl', '-l', 'en', '-q', '-']
 A_max = args.author_num
 P_max = args.paper_num
 V_max = args.venue_num
@@ -44,7 +45,7 @@ walk_n = args.walk_n
 walk_l = args.walk_l
 
 
-class paper:
+class Paper:
 	def __init__(self, title, author_list, time, venue, index, reference, abstract):
 		self.title = title
 		self.author_list = author_list
@@ -53,6 +54,7 @@ class paper:
 		self.index = index
 		self.reference = reference
 		self.abstract = abstract
+
 	def __cmp__(self,other):
 		return cmp(self.index,other.index) 
 
@@ -65,14 +67,16 @@ def read_paper_data():
 	title_s = ''
 	author_s = ''
 	year_s = ''
-	venue_s = ''
-	index_s = ''
+	venue_s = 0
+	index_s = 0
 	reference_s = ''
 	abstract_s = ''
 
 	data_file = open(data_path + "/small_data_with_map_id.txt", "r") 
-	for line in data_file:
+	print(data_file)
+	for line in tqdm(data_file):
 		line=line.strip()
+
 		if line[0:2] == "#*":
 			title_s = line[2:]
 		elif line[0:2] == "#@":
@@ -88,19 +92,20 @@ def read_paper_data():
 		elif line[0:2] == "#!":
 			abstract_s = line[2:]
 		elif line.strip() == '':
-			p_temp = paper(title_s, author_s, year_s, venue_s, index_s, reference_s, abstract_s)
+			p_temp = Paper(title_s, author_s, year_s, venue_s, index_s, reference_s, abstract_s)
 			p_list.append(p_temp)
 			p_time[index_s] = year_s
 			p_venue[index_s] = venue_s
 			title_s = ''
 			author_s = ''
 			year_s = ''
-			venue_s = ''
-			index_s = ''
+			venue_s = 0
+			index_s = 0
 			reference_s = ''
 			abstract_s = ''
-	data_file.close()
 
+	data_file.close()
+	print('Number of papers %d' % len(p_list))
 	p_list = sorted(p_list)
 
 	a_p_list_train = [[] for k in range(A_max)]
@@ -110,29 +115,42 @@ def read_paper_data():
 	p_cite_p_list = [[] for k in range(P_max)]
 	v_p_list_train =[[] for k in range(V_max)]
 
-	for i in range(len(p_list)):
-		if p_time[p_list[i].index] < split_T:
-			v_p_list_train[int(p_list[i].venue)].append(p_list[i].index)
+	unique_index = []
+	for p in p_list:
+		unique_index.append(p.index)
+	print('Unique index %d\n' % len(set(unique_index)))
 
-		if len(p_list[i].reference) and p_time[p_list[i].index] < split_T:
-			reference_s = re.split(':', p_list[i].reference)
+	count = 0
+	appended_index = []
+	for i in range(len(p_list)):
+		paper = p_list[i]
+
+		if p_time[paper.index] < split_T:
+			v_p_list_train[int(paper.venue)].append(paper.index)
+
+		if len(paper.reference) and p_time[paper.index] < split_T:
+			reference_s = re.split(':', paper.reference)
 			for k in range(len(reference_s)):
-				p_cite_p_list[p_list[i].index].append(int(reference_s[k]))
-		elif len(p_list[i].reference) and p_time[p_list[i].index] >= split_T:
-			reference_s = re.split(':', p_list[i].reference)
+				p_cite_p_list[paper.index].append(int(reference_s[k]))
+		elif len(paper.reference) and p_time[paper.index] >= split_T:
+			reference_s = re.split(':', paper.reference)
 			for k in range(len(reference_s)):
 				if p_time[int(reference_s[k])] < split_T:
-					p_cite_p_list[p_list[i].index].append(int(reference_s[k]))
+					p_cite_p_list[paper.index].append(int(reference_s[k]))
 
-		author_s = re.split(':', p_list[i].author_list)
-		for j in range(len(author_s)):
-			if p_time[p_list[i].index] < split_T:
-				p_a_list_train[p_list[i].index].append(int(author_s[j]))
-				a_p_list_train[int(author_s[j])].append(p_list[i].index)
-			elif p_time[p_list[i].index] >= split_T:
-				p_a_list_test[p_list[i].index].append(int(author_s[j]))
-				a_p_list_test[int(author_s[j])].append(p_list[i].index)
+		author_s = [ a for a in paper.author_list.split(':') if len(a) >  0]
 
+		for author in author_s:
+			if p_time[paper.index] < split_T:
+				count += 1
+				appended_index.append(paper.index)
+				p_a_list_train[paper.index].append(int(author))
+				a_p_list_train[int(author)].append(paper.index)
+			else:
+				p_a_list_test[paper.index].append(int(author))
+				a_p_list_test[int(author)].append(paper.index)
+	print(len(set(appended_index)))
+	print(count)
 
 	p_a_list_train_f = open(data_path + "/paper-author-list-train.txt", "w")
 	p_a_list_test_f = open(data_path + "/paper-author-list-test.txt", "w")
@@ -140,31 +158,37 @@ def read_paper_data():
 	p_cite_p_list_f = open(data_path + "/paper-citation-list.txt", "w")
 	p_v_f = open(data_path + "/paper-venue.txt", "w")
 	v_p_list_train_f = open(data_path + "/venue-paper-list-train.txt", "w")
+	count = 0
 
-	for i in range(len(p_list)):
-		p_v_f.write(str(i) + "," + str(p_list[i].venue))
-		p_v_f.write("\n")
-		if len(p_a_list_train[i]):
+	for i in range(len(p_a_list_train)):
+		if len(p_a_list_train[i]) != 0:
+			count += 1
 			p_a_list_train_f.write(str(i) + ":")
 			for j in range(len(p_a_list_train[i])-1):
 				p_a_list_train_f.write(str(p_a_list_train[i][j])+",")
 			p_a_list_train_f.write(str(p_a_list_train[i][-1]))
 			p_a_list_train_f.write("\n")
 
-		if len(p_a_list_test[i]):
+	for i in range(len(p_a_list_test)):
+		if len(p_a_list_test[i]) != 0:
 			p_a_list_test_f.write(str(i) + ":")
 			for j in range(len(p_a_list_test[i])-1):
 				p_a_list_test_f.write(str(p_a_list_test[i][j])+",")
 			p_a_list_test_f.write(str(p_a_list_test[i][-1]))
 			p_a_list_test_f.write("\n")
-
-		if len(p_cite_p_list[i]):
+	for i in range(len(p_cite_p_list)):
+		if len(p_cite_p_list[i]) != 0:
 			p_cite_p_list_f.write(str(i)+":")
 			for k in range(len(p_cite_p_list[i])-1):
 				p_cite_p_list_f.write(str(p_cite_p_list[i][k])+",")
 			p_cite_p_list_f.write(str(p_cite_p_list[i][-1]))
 			p_cite_p_list_f.write("\n")
 
+	for i in tqdm(range(len(p_list))):
+		p_v_f.write(str(i) + "," + str(p_list[i].venue))
+		p_v_f.write("\n")
+
+	print(count)
 	for t in range(A_max):
 		if(len(a_p_list_train[t])):
 			a_p_list_train_f.write(str(t)+":")
@@ -251,7 +275,7 @@ def pickle_paper_content(p_list):
 	for idx, ss in enumerate(abstracts):
 		words = ss.strip().lower().split()
 		paper_content[idx] = [dictionary[w] if w in dictionary else 1 for w in words]
-
+	print('Content size %d' % len(paper_content))
 	paper_index = []
 	for i in range(len(p_list)):
 		paper_index.append(p_list[i].index)
@@ -334,71 +358,117 @@ def generate_metapath_walk():
 			if len(a_p_list_train[i]):
 				curNode = "a" + str(i)
 				preNode = "a" + str(i)
-				APPA_walk_file.write(curNode + " ")
-				for l in range(walk_l - 1):
-					if curNode[0] == "a":
-						preNode = curNode
-						curNode = int(curNode[1:])
-						curNode = random.choice(a_p_list_train[curNode])
-						APPA_walk_file.write(curNode + " ")	
-					elif curNode[0] == "p":
-						curNode = int(curNode[1:])
-						if preNode[0] == "a" and len(p_cite_p_list[curNode]):
-							preNode="p"+str(curNode)
-							curNode=random.choice(p_cite_p_list[curNode])
-							APPA_walk_file.write(curNode+" ")
-						elif preNode[0] == "a" and len(p_cite_p_list[curNode]) == 0:
-							preNode="p"+str(curNode)
-							curNode = random.choice(p_a_list_train[curNode])
-							APPA_walk_file.write(curNode+" ")
-						elif preNode[0] == "p":
-							preNode = "p" + str(curNode)
-							curNode = random.choice(p_a_list_train[curNode])
-							APPA_walk_file.write(curNode+" ")
-				APPA_walk_file.write("\n")
+				APPA_path = []
+				APPA_path.append(curNode)
+				# APPA_walk_file.write(curNode + " ")
+				try:
+					for l in range(walk_l - 1):
+						if curNode[0] == "a":
+							preNode = curNode
+							curNode = int(curNode[1:])
+							curNode = random.choice(a_p_list_train[curNode])
+							# APPA_walk_file.write(curNode + " ")	
+							APPA_path.append(curNode)
+						elif curNode[0] == "p":
+							curNode = int(curNode[1:])
+							if preNode[0] == "a" and len(p_cite_p_list[curNode]):
+								preNode="p"+str(curNode)
+								curNode=random.choice(p_cite_p_list[curNode])
+								APPA_walk_file.write(curNode+" ")
+								APPA_path.append(curNode)
+							elif preNode[0] == "a" and len(p_cite_p_list[curNode]) == 0:
+								preNode="p"+str(curNode)
+								curNode = random.choice(p_a_list_train[curNode])
+								APPA_walk_file.write(curNode+" ")
+								APPA_path.append(curNode)
+							elif preNode[0] == "p":
+								preNode = "p" + str(curNode)
+								curNode = random.choice(p_a_list_train[curNode])
+								APPA_walk_file.write(curNode+" ")
+								APPA_path.append(curNode)
+				except IndexError:
+					continue
+				except TypeError:
+					continue
+
+				if len(APPA_path) == walk_l:
+					APPA_walk_file.write(" ".join(APPA_path)+"\n")
+
 	APPA_walk_file.close()
 
-	# generate APVPA random walk sequence
+	print("generate APVPA random walk sequence")
 	APVPA_walk_file = open(data_path + "/APVPA_walk.txt", "w")
-	for t in range(walk_n):
+	for t in tqdm(range(5)):
 		for i in range(A_max):
 			if len(a_p_list_train[i]):
 				curNode = "a" + str(i)
 				preNode = "a" + str(i)
-				APVPA_walk_file.write(curNode + " ")
-				for l in range(walk_l - 1):
-					if curNode[0] == "a":
-						preNode = curNode
-						curNode = int(curNode[1:])
-						curNode = random.choice(a_p_list_train[curNode])
-						APVPA_walk_file.write(curNode + " ")
-					elif curNode[0] == "p":
-						curNode = int(curNode[1:])
-						if preNode[0] == "a":
-							preNode = "p" + str(curNode)
-							curNode = p_venue[curNode]
-							APVPA_walk_file.write(curNode+" ")
-						else:
-							preNode = "p" + str(curNode)
-							curNode = random.choice(p_a_list_train[curNode])
-							APVPA_walk_file.write(curNode+" ")
-					elif curNode[0] == "v":
-						preNode = curNode
-						curNode = int(curNode[1:])
-						curNode = random.choice(v_p_list_train[curNode])
-						APVPA_walk_file.write(curNode+" ")
-				APVPA_walk_file.write("\n")
+				APVPA_path = []
+				APVPA_path.append(curNode)
+				# APVPA_walk_file.write(curNode + " ")
+				try:
+					for l in range(walk_l - 1):
+						if curNode[0] == "a":
+							preNode = curNode
+							curNode = int(curNode[1:])
+							curNode = random.choice(a_p_list_train[curNode])
+							APVPA_path.append(curNode)
+							# APVPA_walk_file.write(curNode + " ")
+						elif curNode[0] == "p":
+							curNode = int(curNode[1:])
+							if preNode[0] == "a":
+								preNode = "p" + str(curNode)
+								curNode = p_venue[curNode]
+								APVPA_path.append(curNode)
+								# APVPA_walk_file.write(curNode+" ")
+							else:
+								preNode = "p" + str(curNode)
+								curNode = random.choice(p_a_list_train[curNode])
+								APVPA_path.append(curNode)
+								# APVPA_walk_file.write(curNode+" ")
+						elif curNode[0] == "v":
+							preNode = curNode
+							curNode = int(curNode[1:])
+							curNode = random.choice(v_p_list_train[curNode])
+							APVPA_path.append(curNode)
+							# APVPA_walk_file.write(curNode+" ")
+				except IndexError:
+					continue
+				except TypeError:
+					continue
+
+				if len(APVPA_path) == walk_l:
+					APVPA_walk_file.write(" ".join(APVPA_path)+ "\n")
+				else:
+					print(len(APVPA_path))
+
 	APVPA_walk_file.close()
 
 
 
-#paper_list = read_paper_data()
+paper_list = read_paper_data()
 
 
-#pickle_paper_content(paper_list)
+# reset_paper_index = {}
+# for p in paper_list:
+# 	if p.index not in reset_paper_index:
+# 		reset_paper_index[p.index] = len(reset_paper_index)
+
+# for pidx, p in enumerate(paper_list):
+# 	valid_ref = []
+# 	for idx in p.reference.split(':'):
+# 		if idx in reset_paper_index:
+# 			valid_ref.append(reset_paper_index[idx])
+
+# 	if len(valid_ref) > 0:
+# 		p.reference = ':'.join(valid_ref)
+# 	p.index = str(reset_paper_index[p.index])
+# 	paper_list[pidx] = p
+
+pickle_paper_content(paper_list)
 
 
-#generate_metapath_walk()
+generate_metapath_walk()
 
 
 

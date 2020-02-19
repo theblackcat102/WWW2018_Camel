@@ -3,7 +3,7 @@ import cPickle as pkl
 import six.moves.cPickle as pickle
 embed_d = 128
 win_L = 5
-data_path = '../data/AMiner-T-2013'
+data_path = '../data/Aminer-T-2010'
 
 
 def load_data(path = data_path + "content.pkl", maxlen = None, n_words = 600000, sort_by_len = False):

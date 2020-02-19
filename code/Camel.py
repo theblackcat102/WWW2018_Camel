@@ -34,7 +34,7 @@ parser.add_argument('--window', type = int, default = 6,
 parser.add_argument('--c_len', type = int, default = 100,
 				   help = 'max len of paper content')
 
-parser.add_argument('--batch_size', type = int, default = 500,
+parser.add_argument('--batch_size', type = int, default = 64,
 				   help = 'batch size of training')
 
 parser.add_argument('--learn_rate', type = float, default = 0.001,

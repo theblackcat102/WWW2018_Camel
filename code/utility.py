@@ -84,11 +84,17 @@ class input_data:
 			p_content, p_content_id = p_content_set
 			p_content = remove_unk(p_content)
 			p_content_set = (p_content, p_content_id)
-
+			print('Content size %d' % len(p_content))
 			return p_content_set
 
 
 		def load_word_embed(path, word_n = 54559, word_dim = 128):
+
+			f = open(path,'r')
+			for line in islice(f, 1, None):
+				index = int(line.split()[0])
+				word_n = max(index+1, word_n)
+
 			word_embed = np.zeros((word_n + 2, word_dim))
 
 			f = open(path,'r')
