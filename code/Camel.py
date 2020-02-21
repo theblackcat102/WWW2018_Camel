@@ -34,13 +34,13 @@ parser.add_argument('--window', type = int, default = 6,
 parser.add_argument('--c_len', type = int, default = 100,
 				   help = 'max len of paper content')
 
-parser.add_argument('--batch_size', type = int, default = 64,
+parser.add_argument('--batch_size', type = int, default = 256,
 				   help = 'batch size of training')
 
 parser.add_argument('--learn_rate', type = float, default = 0.001,
 				   help = 'learning rate')
 
-parser.add_argument('--train_iter_max', type = float, default = 1000,
+parser.add_argument('--train_iter_max', type = int, default = 1000,
 				   help = 'max number of training iterations')
 
 parser.add_argument('--save_model_freq', type = float, default = 5,
@@ -111,7 +111,7 @@ if train_test_label == 2:
 	#input_data.gen_evaluate_neg_ids()
 
 # Camel (objective function formulation) begin #
-if train_test_label == 0:
+if train_test_label == 0 or train_test_label == 1:
 	# tensor preparation
 	# direct and indirect triple relations
 	p_a_a_dir = tf.placeholder(tf.int32, [None, 3])
@@ -178,8 +178,10 @@ if train_test_label == 0:
 if train_test_label == 0:# train model
 	init = tf.global_variables_initializer()
 	saver = tf.train.Saver(max_to_keep = 2)
-	with tf.Session(config = tf.ConfigProto(inter_op_parallelism_threads = 2,
-			intra_op_parallelism_threads = 2)) as sess:
+	config = tf.ConfigProto(inter_op_parallelism_threads = 2,
+			intra_op_parallelism_threads = 2)
+	config.gpu_options.allow_growth = True
+	with tf.Session(config = config) as sess:
 		sess.run(init)
 		for epoch in range(1, iter_max):
 			print("epoch: "+str(epoch))
@@ -230,8 +232,11 @@ if train_test_label == 0:# train model
 				input_data.Camel_evaluate(p_text_deep_f, a_latent_f, top_K)
 
 elif train_test_label == 1:# test model
+	init = tf.global_variables_initializer()
+	saver = tf.train.Saver()
 	with tf.Session(config = tf.ConfigProto(inter_op_parallelism_threads = 2,
 			intra_op_parallelism_threads = 2)) as sess:
+		sess.run(init)
 		restore_idx = 20 # set restore model idx
 		saver.restore(sess, model_path + "Camel" + str(restore_idx) + ".ckpt")
 

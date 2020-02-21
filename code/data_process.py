@@ -158,19 +158,20 @@ def read_paper_data():
 	p_cite_p_list_f = open(data_path + "/paper-citation-list.txt", "w")
 	p_v_f = open(data_path + "/paper-venue.txt", "w")
 	v_p_list_train_f = open(data_path + "/venue-paper-list-train.txt", "w")
-	count = 0
+	train_count = 0
 
 	for i in range(len(p_a_list_train)):
 		if len(p_a_list_train[i]) != 0:
-			count += 1
+			train_count += 1
 			p_a_list_train_f.write(str(i) + ":")
 			for j in range(len(p_a_list_train[i])-1):
 				p_a_list_train_f.write(str(p_a_list_train[i][j])+",")
 			p_a_list_train_f.write(str(p_a_list_train[i][-1]))
 			p_a_list_train_f.write("\n")
-
+	test_count = 0
 	for i in range(len(p_a_list_test)):
 		if len(p_a_list_test[i]) != 0:
+			test_count += 1
 			p_a_list_test_f.write(str(i) + ":")
 			for j in range(len(p_a_list_test[i])-1):
 				p_a_list_test_f.write(str(p_a_list_test[i][j])+",")
@@ -197,13 +198,51 @@ def read_paper_data():
 			a_p_list_train_f.write(str(a_p_list_train[t][-1]))
 			a_p_list_train_f.write("\n")
 
+	p_a_neg = [[] for k in range(P_max)]
+	p_a_neg_train_f = open(data_path + "/paper_author_neg_ids.txt", 'w')
+	P_train = train_count
+	for t in tqdm(range(P_max)):
+		if len(p_a_list_train[t]):
+			negative_authors = []
+			while len(negative_authors) < 95:
+				random_idx = random.randint(0, P_train)
+				if random_idx == t or len(p_a_list_train[random_idx]) == 0:
+					continue
+				author = random.choice(p_a_list_train[random_idx])
+				if author not in p_a_list_train[t]:
+					negative_authors.append(author)
+			p_a_neg[t] = negative_authors
+
+		if len(p_a_list_test[t]):
+			negative_authors = []
+			while len(negative_authors) < 95:
+				random_idx = random.randint(0, P_train)
+				if random_idx == t or len(p_a_list_test[random_idx]) == 0:
+					continue
+				author = random.choice(p_a_list_test[random_idx])
+				if author not in p_a_list_test[t]:
+					negative_authors.append(author)
+			p_a_neg[t] = negative_authors
+
+	for t in range(P_max):
+		if len(p_a_neg[t]):
+			p_a_neg_train_f.write(str(t)+":")
+			for tt in range(len(p_a_neg[t])-1):
+				p_a_neg_train_f.write(str(p_a_neg[t][tt])+",")
+			p_a_neg_train_f.write(str(p_a_neg[t][-1]))
+			p_a_neg_train_f.write("\n")
+
+	venue_count = 0
 	for t in range(V_max):
 		if(len(v_p_list_train[t])):
+			venue_count += 1
 			v_p_list_train_f.write(str(t)+":")
 			for tt in range(len(v_p_list_train[t])-1):
 				v_p_list_train_f.write(str(v_p_list_train[t][tt])+",")
 			v_p_list_train_f.write(str(v_p_list_train[t][-1]))
 			v_p_list_train_f.write("\n")
+	print("Total venue : ", venue_count)
+	print('Test cnt: ', test_count)
 
 	p_a_list_train_f.close()
 	p_a_list_test_f.close()
@@ -448,22 +487,6 @@ def generate_metapath_walk():
 
 paper_list = read_paper_data()
 
-
-# reset_paper_index = {}
-# for p in paper_list:
-# 	if p.index not in reset_paper_index:
-# 		reset_paper_index[p.index] = len(reset_paper_index)
-
-# for pidx, p in enumerate(paper_list):
-# 	valid_ref = []
-# 	for idx in p.reference.split(':'):
-# 		if idx in reset_paper_index:
-# 			valid_ref.append(reset_paper_index[idx])
-
-# 	if len(valid_ref) > 0:
-# 		p.reference = ':'.join(valid_ref)
-# 	p.index = str(reset_paper_index[p.index])
-# 	paper_list[pidx] = p
 
 pickle_paper_content(paper_list)
 

@@ -6,7 +6,7 @@ import re
 import random
 from keras.preprocessing import sequence
 from itertools import *
-
+from sklearn.metrics import precision_score, recall_score
 
 class input_data:
 	def __init__(self, args):
@@ -206,34 +206,47 @@ class input_data:
 		ave_a_num = 0.0 
 
 		for i in range(self.args.paper_num):
+
 			if len(self.p_a_dir_list_test[i]) and len(p_a_neg_list_test[i]) and test_p_has_train_a[i]:
 				evaluate_p_num += 1
 				correct_num = 0
 				score_list = []
 
+				label = np.zeros(self.args.author_num)
+				pred = np.zeros(self.args.author_num)
+
 				for j in range(len(self.p_a_dir_list_test[i])):
 					a_id_temp = int(self.p_a_dir_list_test[i][j][1:])
 					score_temp = np.dot(p_text_deep_f[p_id_map[i]], a_latent_f[a_id_temp])
-					score_list.append(score_temp)
+					score_list.append((score_temp, a_id_temp))
 
 				for k in range(len(p_a_neg_list_test[i])):
 					a_id_temp = p_a_neg_list_test[i][k]
 					score_temp = np.dot(p_text_deep_f[p_id_map[i]], a_latent_f[a_id_temp])
-					score_list.append(score_temp)
+					score_list.append((score_temp, a_id_temp))
 
-				score_list.sort()
+				score_list.sort(key=lambda x: x[0])
 
-				score_threshold = score_list[ - top_K - 1]
+				score_threshold = score_list[ -top_K-1:]
+				# score_threshold = score_list[-top_K-1]
+				for (score, a_id_temp) in score_threshold:
+					if self.author_train[a_id_temp]:
+						pred[a_id_temp] = 1
 
 				for jj in range(len(self.p_a_dir_list_test[i])):
 					a_id_temp = int(self.p_a_dir_list_test[i][jj][1:])
-					if self.author_train[a_id_temp]:
-						score_temp = np.dot(p_text_deep_f[p_id_map[i]], a_latent_f[a_id_temp])
-						if score_temp > score_threshold:
-							correct_num += 1
+					# print(a_id_temp)
+					label[a_id_temp] = 1
+					# if self.author_train[a_id_temp]:
+					# 	score_temp = np.dot(p_text_deep_f[p_id_map[i]], a_latent_f[a_id_temp])
+					# 	if score_temp > score_threshold:
+					# 		pred.append( a_id_temp )
+					# 		correct_num += 1
+					# 		print()
+				
 
-				recall_ave += float(correct_num) / test_p_has_train_a[i]
-				pre_ave += float(correct_num) / top_K
+				recall_ave +=  recall_score(label, pred)#float(correct_num) / test_p_has_train_a[i]
+				pre_ave += precision_score(label, pred)#float(correct_num) / top_K
 
 				ave_a_num += test_p_has_train_a[i]
 
@@ -241,10 +254,10 @@ class input_data:
 		print ("average evaluate author number: " + str(ave_a_num / evaluate_p_num))
 		recall_ave = recall_ave / evaluate_p_num
 		pre_ave = pre_ave / evaluate_p_num
-		F_1= (2 * recall_ave * pre_ave) /(recall_ave + pre_ave)
+		F_1= float(2 * recall_ave * pre_ave) /float(recall_ave + pre_ave)
 		print ("recall_ave@top_K: " + str(recall_ave))
 		print ("pre_ave@top_K: " + str(pre_ave))
-
+		print("F1@top_K: %f" % F_1)
 		# AUC Score
 		AUC_ave = 0
 		for i in range(self.args.paper_num):
