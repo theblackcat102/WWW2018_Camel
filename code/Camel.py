@@ -43,7 +43,7 @@ parser.add_argument('--learn_rate', type = float, default = 0.001,
 parser.add_argument('--train_iter_max', type = int, default = 1000,
 				   help = 'max number of training iterations')
 
-parser.add_argument('--save_model_freq', type = float, default = 5,
+parser.add_argument('--save_model_freq', type = int, default = 5,
 				   help = 'number of iterations to save model')
 
 parser.add_argument('--c_reg', type = float, default = 0.001,
